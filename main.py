@@ -4,28 +4,28 @@ from uuid import uuid4
 import json
 
 
-class Json:
+class JSONSerDes:
     # TODO: add notSerializable validation
 
     @classmethod
-    def encoder(cls, obj):
+    def dumps(cls, obj, first=None):
         if obj is None:
             return ''
+        elif first is None and not isinstance(obj, dict):
+            raise TypeError
         result = str()
-
         if isinstance(obj, dict):
             return cls._create_node(obj, '{', '}')
         elif isinstance(obj, tuple) or isinstance(obj, list):
             return cls._create_node(obj, '[', ']')
         elif isinstance(obj, str):
             result += '"{}"'.format(obj)
-        else:
+        elif isinstance(obj, int):
             result += '{}'.format(obj)
-
         return result
 
     @classmethod
-    def decoder(cls, obj, result=None):
+    def load(cls, obj, result=None):
         brackets = '[{"'
         if obj[0] in brackets:
             to = cls._find_closing_bracket(obj, 0)
@@ -46,7 +46,7 @@ class Json:
                     name_to = cls._find_closing_bracket(obj, i)
                     name = obj[i + 1:name_to]
                     bracket_to = cls._find_closing_bracket(obj, name_to + 3)
-                    result[name] = cls.decoder(obj[name_to + 3:bracket_to + 1], list)
+                    result[name] = cls.load(obj[name_to + 3:bracket_to + 1])
                     i = bracket_to
                 i += 1
         elif isinstance(result, list):
@@ -54,7 +54,7 @@ class Json:
             while i < len(obj):
                 if obj[i] in '[{':
                     to = cls._find_closing_bracket(obj, i)
-                    result.append(cls.decoder(obj[i:to + 1]))
+                    result.append(cls.load(obj[i:to + 1]))
                     i = to
                 elif obj[i].isdigit():
                     if i + 1 < len(obj):
@@ -84,9 +84,9 @@ class Json:
             return start + 1
         iter_bracket = 1
         for i in range(start + 1, len(string)):
-            if string[i] == close_bracket:
+            if string[i] in close_bracket:
                 iter_bracket -= 1
-            elif string[i] == open_bracket:
+            elif string[i] in open_bracket:
                 iter_bracket += 1
 
             if iter_bracket == 0:
@@ -98,10 +98,10 @@ class Json:
         result += bracket
         if bracket == '{':
             for key, value in obj.items():
-                result += cls.__string_check(key, value)
+                result += cls._string_check(key, value)
         elif bracket == '[':
             for value in obj:
-                result += cls.__string_check(value)
+                result += cls._string_check(value)
 
         if len(result) > 1:
             return result[:-2] + reverse_bracket
@@ -109,23 +109,19 @@ class Json:
             return result + reverse_bracket
 
     @classmethod
-    def __string_check(cls, key, value=None):
+    def _string_check(cls, key, value=None):
         result = ''
         if isinstance(key, str):
             result += '"{}"'.format(key)
         else:
-            result += '{}'.format(key)
+            result += '{}'.format(key) if value is None else '"{}"'.format(key)
         if value is not None:
-            result += ': ' + Json.encoder(value)
+            result += ': {}'.format(JSONSerDes.dumps(value, 1))
         result += ', '
         return result
 
 
 def main():
-    #nums = [[i] for i in range(10)]
-    #random.shuffle(nums)
-    #print('Before: ' + str(nums))
-    #print('After: ' + str(Qsort.sort(nums)))
 
     test_dict = {
         'list': [1, '2', "3", [4, 5, [[]]]],
@@ -135,7 +131,8 @@ def main():
             'c': 2
         },
         'empty_dict': {},
-        3: 'name'
+        3: 'name',
+        'num': 3
     }
 
     test_list = [1, 2, '4', [[[]]], {
@@ -148,13 +145,15 @@ def main():
         'empty_dict': {},
         3: 'name'
     }]
-    encoded = json.dumps(test_list)
+    encoded = json.dumps(test_dict)
     decoded = json.loads(encoded)
 
+    my_encoded = JSONSerDes.dumps(test_dict)
+
     print('Standart dict to JSON: {}'.format(encoded))
-    print('      My dict to json: {}\n'.format(Json.encoder(decoded)))
+    print('      My dict to json: {}\n'.format(my_encoded))
     print('Standart JSON to dict: {}'.format(decoded))
-    print('      My JSON to dict: {}'.format(Json.decoder(encoded)))
+    print('      My JSON to dict: {}'.format(JSONSerDes.load(encoded)))
 
 
 if __name__ == "__main__":
